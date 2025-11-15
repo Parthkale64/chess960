@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
+import { chessSounds } from "@/utils/sounds";
 
 const Index = () => {
   const { theme, setTheme } = useTheme();
@@ -39,7 +40,22 @@ const Index = () => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleGameUpdate = useCallback((fen: string) => {
-    const newGame = new Chess(fen);
+    // Preserve move history in multiplayer by using the existing game's PGN
+    const newGame = new Chess();
+    if (game.history().length > 0) {
+      try {
+        newGame.loadPgn(game.pgn());
+        // Apply the new position if it's different
+        if (newGame.fen() !== fen) {
+          newGame.load(fen);
+        }
+      } catch {
+        newGame.load(fen);
+      }
+    } else {
+      newGame.load(fen);
+    }
+    
     setGame(newGame);
     
     // Set PGN headers
@@ -58,7 +74,7 @@ const Index = () => {
       }
       newGame.header("Result", result);
     }
-  }, [whitePlayerName, blackPlayerName]);
+  }, [game, whitePlayerName, blackPlayerName]);
 
   const { playerRole, isConnected, makeMove } = useMultiplayer(
     isMultiplayer ? roomId : null,
@@ -80,11 +96,11 @@ const Index = () => {
             const result = `${blackPlayerName} wins on time!`;
             setGameResult(result);
             toast.error(result);
+            chessSounds.playGameEnd(true);
             
             // Set PGN result
-            const gameCopy = new Chess(game.fen());
-            gameCopy.header("Result", "0-1");
-            setGame(gameCopy);
+            game.header("Result", "0-1");
+            setGame(game);
             return 0;
           }
           return prev - 1;
@@ -96,11 +112,11 @@ const Index = () => {
             const result = `${whitePlayerName} wins on time!`;
             setGameResult(result);
             toast.error(result);
+            chessSounds.playGameEnd(true);
             
             // Set PGN result
-            const gameCopy = new Chess(game.fen());
-            gameCopy.header("Result", "1-0");
-            setGame(gameCopy);
+            game.header("Result", "1-0");
+            setGame(game);
             return 0;
           }
           return prev - 1;
@@ -115,7 +131,13 @@ const Index = () => {
 
   const handleMove = useCallback(
     (from: Square, to: Square, promotion?: PieceSymbol) => {
-      const gameCopy = new Chess(game.fen());
+      // Preserve move history by loading from PGN
+      const gameCopy = new Chess();
+      if (game.history().length > 0) {
+        gameCopy.loadPgn(game.pgn());
+      } else {
+        gameCopy.load(game.fen());
+      }
       
       // Check if this is a pawn promotion move
       const piece = gameCopy.get(from);
@@ -144,6 +166,9 @@ const Index = () => {
                 ...prev,
                 { piece: move.captured as PieceSymbol, color: move.color === "w" ? "b" : "w" },
               ]);
+              chessSounds.playCapture();
+            } else {
+              chessSounds.playMove();
             }
 
             setMoveHistory((prev) => [...prev, move.san]);
@@ -172,16 +197,20 @@ const Index = () => {
               const result = gameCopy.turn() === "w" ? "0-1" : "1-0";
               gameCopy.header("Result", result);
               setGameResult(getGameStatus());
+              chessSounds.playGameEnd(true);
             } else if (gameCopy.isCheck()) {
               toast.warning("Check!");
+              chessSounds.playCheck();
             } else if (gameCopy.isDraw()) {
               setIsTimerActive(false);
               gameCopy.header("Result", "1/2-1/2");
               setGameResult("Draw!");
+              chessSounds.playGameEnd(false);
             } else if (gameCopy.isStalemate()) {
               setIsTimerActive(false);
               gameCopy.header("Result", "1/2-1/2");
               setGameResult("Stalemate!");
+              chessSounds.playGameEnd(false);
             }
             
             setGame(gameCopy);
@@ -234,43 +263,75 @@ const Index = () => {
   };
 
   const handleChess960 = () => {
-    const chess960Positions = [
-      "QNNRKR", "NQNRKR", "NNQRKR", "NNRQKR", "NNRKQR", "NNRKRQ",
-      "QNRNKR", "NQRNKR", "NRQNKR", "NRNQKR", "NRNKQR", "NRNKRQ",
-      "QNRKNR", "NQRKNR", "NRQKNR", "NRKQNR", "NRKNQR", "NRKNRQ",
-      "QNRKRN", "NQRKRN", "NRQKRN", "NRKQRN", "NRKRQN", "NRKRNQ"
-    ];
-    
-    const randomPos = chess960Positions[Math.floor(Math.random() * chess960Positions.length)];
-    const backRank = randomPos.toLowerCase().split("");
-    
-    let fen = backRank.join("") + "/pppppppp/8/8/8/8/PPPPPPPP/" + 
-              backRank.join("").toUpperCase() + " w KQkq - 0 1";
-    
-    const newGame = new Chess();
+    // Generate a valid Chess960 back rank (white side)
+    const pieces = ['B', 'B', 'Q', 'N', 'N', 'R', 'K', 'R'];
+    const backRank = Array(8).fill('');
+    const even = [0, 2, 4, 6];
+    const odd = [1, 3, 5, 7];
+
+    const pickRandom = (arr: number[]) => arr.splice(Math.floor(Math.random() * arr.length), 1)[0];
+
+    // Bishops on opposite colors
+    const evenCopy = [...even];
+    const oddCopy = [...odd];
+    const bishop1Pos = pickRandom(evenCopy);
+    const bishop2Pos = pickRandom(oddCopy);
+    backRank[bishop1Pos] = 'B';
+    backRank[bishop2Pos] = 'B';
+
+    // Remaining indices
+    const remaining = Array.from({ length: 8 }, (_, i) => i).filter((i) => ![bishop1Pos, bishop2Pos].includes(i));
+
+    // Queen
+    const queenPos = pickRandom(remaining);
+    backRank[queenPos] = 'Q';
+
+    // Knights (2)
+    const knight1Pos = pickRandom(remaining);
+    const knight2Pos = pickRandom(remaining);
+    backRank[knight1Pos] = 'N';
+    backRank[knight2Pos] = 'N';
+
+    // Remaining 3 squares: place R K R with king between rooks
+    remaining.sort((a, b) => a - b);
+    backRank[remaining[0]] = 'R';
+    backRank[remaining[1]] = 'K';
+    backRank[remaining[2]] = 'R';
+
+    const whiteRank = backRank.join('');
+    const blackRank = whiteRank.toLowerCase();
+
+    // Chess960 FEN with castling rights
+    const fen = `${blackRank}/pppppppp/8/8/8/8/PPPPPPPP/${whiteRank} w HAha - 0 1`;
+
+    let newGame: Chess;
     try {
-      newGame.load(fen);
-      const today = new Date();
-      newGame.header("Event", "Chess960 Game");
-      newGame.header("Site", "Chess App");
-      newGame.header("Date", today.toISOString().split('T')[0]);
-      newGame.header("Round", "1");
-      newGame.header("White", whitePlayerName);
-      newGame.header("Black", blackPlayerName);
-      newGame.header("Result", "*");
-      
-      setGame(newGame);
-      setMoveHistory([]);
-      setCapturedPieces([]);
-      setWhiteTime(600);
-      setBlackTime(600);
-      setIsTimerActive(false);
-      setMovesPlayed(0);
-      if (timerRef.current) clearInterval(timerRef.current);
-      toast.success("Chess960 position set!");
+      // Create Chess960 game with proper castling support
+      newGame = new Chess(fen, { chess960: true } as any);
     } catch (error) {
-      toast.error("Failed to set Chess960 position");
+      console.error("Chess960 setup error:", error);
+      toast.error("Failed to set Chess960 position. Using standard chess.");
+      newGame = new Chess();
     }
+
+    const today = new Date();
+    newGame.header("Event", "Chess960 Game");
+    newGame.header("Site", "Chess App");
+    newGame.header("Date", today.toISOString().split('T')[0]);
+    newGame.header("Round", "1");
+    newGame.header("White", whitePlayerName);
+    newGame.header("Black", blackPlayerName);
+    newGame.header("Result", "*");
+
+    setGame(newGame);
+    setMoveHistory([]);
+    setCapturedPieces([]);
+    setWhiteTime(600);
+    setBlackTime(600);
+    setIsTimerActive(false);
+    setMovesPlayed(0);
+    if (timerRef.current) clearInterval(timerRef.current);
+    toast.success("Chess960 position set!");
   };
 
   const handlePlayerNamesSave = (whiteName: string, blackName: string) => {
@@ -291,20 +352,20 @@ const Index = () => {
     setIsTimerActive(false);
     const result = `${blackPlayerName} wins by resignation!`;
     setGameResult(result);
-    const gameCopy = new Chess(game.fen());
-    gameCopy.header("Result", "0-1");
-    setGame(gameCopy);
+    game.header("Result", "0-1");
+    setGame(game);
     toast.error(result);
+    chessSounds.playGameEnd(true);
   };
 
   const handleResignBlack = () => {
     setIsTimerActive(false);
     const result = `${whitePlayerName} wins by resignation!`;
     setGameResult(result);
-    const gameCopy = new Chess(game.fen());
-    gameCopy.header("Result", "1-0");
-    setGame(gameCopy);
+    game.header("Result", "1-0");
+    setGame(game);
     toast.error(result);
+    chessSounds.playGameEnd(true);
   };
 
   const handleResign = () => {
@@ -313,10 +374,20 @@ const Index = () => {
     const winner = playerRole === 'w' ? blackPlayerName : whitePlayerName;
     const result = `${winner} wins by resignation!`;
     setGameResult(result);
-    const gameCopy = new Chess(game.fen());
-    gameCopy.header("Result", playerRole === 'w' ? "0-1" : "1-0");
-    setGame(gameCopy);
+    game.header("Result", playerRole === 'w' ? "0-1" : "1-0");
+    setGame(game);
     toast.error(result);
+    chessSounds.playGameEnd(true);
+  };
+
+  const handleOfferDraw = () => {
+    setIsTimerActive(false);
+    const result = "Game drawn by agreement";
+    setGameResult(result);
+    game.header("Result", "1/2-1/2");
+    setGame(game);
+    toast.success(result);
+    chessSounds.playGameEnd(false);
   };
 
   const getGameStatus = () => {
@@ -408,6 +479,7 @@ const Index = () => {
               onResignWhite={handleResignWhite}
               onResignBlack={handleResignBlack}
               onResign={handleResign}
+              onOfferDraw={handleOfferDraw}
             />
             <CapturedPieces captured={capturedPieces} />
             <MoveHistory moves={moveHistory} game={game} />

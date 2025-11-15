@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Clock, Shuffle, Timer, Flag } from "lucide-react";
+import { RotateCcw, Clock, Shuffle, Timer, Flag, Handshake } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface GameStatusProps {
@@ -21,6 +21,7 @@ interface GameStatusProps {
   onResignWhite?: () => void;
   onResignBlack?: () => void;
   onResign?: () => void;
+  onOfferDraw?: () => void;
 }
 
 export const GameStatus = ({
@@ -41,6 +42,7 @@ export const GameStatus = ({
   onResignWhite,
   onResignBlack,
   onResign,
+  onOfferDraw,
 }: GameStatusProps) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -152,6 +154,13 @@ export const GameStatus = ({
                     </Button>
                   </>
                 ) : null}
+                
+                {!isMultiplayer && onOfferDraw && (
+                  <Button onClick={onOfferDraw} variant="secondary" className="flex-1" size="sm">
+                    <Handshake className="h-4 w-4 mr-2" />
+                    Offer Draw
+                  </Button>
+                )}
               </>
             )}
           </div>
