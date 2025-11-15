@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Clock, Shuffle } from "lucide-react";
+import { RotateCcw, Clock, Shuffle, Timer, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface GameStatusProps {
@@ -14,6 +14,13 @@ interface GameStatusProps {
   blackPlayerName: string;
   whiteTime: number;
   blackTime: number;
+  onSetTime: () => void;
+  showSetTime: boolean;
+  isMultiplayer: boolean;
+  playerRole: 'w' | 'b' | 'spectator' | null;
+  onResignWhite?: () => void;
+  onResignBlack?: () => void;
+  onResign?: () => void;
 }
 
 export const GameStatus = ({
@@ -27,6 +34,13 @@ export const GameStatus = ({
   blackPlayerName,
   whiteTime,
   blackTime,
+  onSetTime,
+  showSetTime,
+  isMultiplayer,
+  playerRole,
+  onResignWhite,
+  onResignBlack,
+  onResign,
 }: GameStatusProps) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -110,6 +124,37 @@ export const GameStatus = ({
               <p className="font-semibold text-destructive">Check!</p>
             </div>
           )}
+
+          <div className="flex gap-2 flex-wrap">
+            {showSetTime && (
+              <Button onClick={onSetTime} variant="outline" className="flex-1" size="sm">
+                <Timer className="h-4 w-4 mr-2" />
+                Set Time
+              </Button>
+            )}
+            
+            {!isGameOver && (
+              <>
+                {isMultiplayer && playerRole && playerRole !== 'spectator' && onResign ? (
+                  <Button onClick={onResign} variant="destructive" className="flex-1" size="sm">
+                    <Flag className="h-4 w-4 mr-2" />
+                    Resign
+                  </Button>
+                ) : !isMultiplayer && onResignWhite && onResignBlack ? (
+                  <>
+                    <Button onClick={onResignWhite} variant="outline" className="flex-1" size="sm">
+                      <Flag className="h-4 w-4 mr-2" />
+                      Resign White
+                    </Button>
+                    <Button onClick={onResignBlack} variant="outline" className="flex-1" size="sm">
+                      <Flag className="h-4 w-4 mr-2" />
+                      Resign Black
+                    </Button>
+                  </>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

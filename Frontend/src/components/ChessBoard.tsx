@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { cn } from "@/lib/utils";
 
@@ -10,18 +10,36 @@ const pieceUnicode: Record<string, string> = {
 interface ChessBoardProps {
   game: Chess;
   onMove: (from: Square, to: Square, promotion?: PieceSymbol) => void;
+  playerRole?: 'w' | 'b' | 'spectator' | null;
 }
 
-export const ChessBoard = ({ game, onMove }: ChessBoardProps) => {
+interface Arrow {
+  from: Square;
+  to: Square;
+}
+
+export const ChessBoard = ({ game, onMove, playerRole }: ChessBoardProps) => {
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
+  const [draggedPiece, setDraggedPiece] = useState<{ square: Square; piece: string } | null>(null);
+  const [arrows, setArrows] = useState<Arrow[]>([]);
+  const [drawingArrow, setDrawingArrow] = useState<Square | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
 
   const board = game.board();
   const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
   const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"];
 
+  const canInteract = !playerRole || playerRole === 'spectator' || game.turn() === playerRole;
+
   const handleSquareClick = useCallback(
     (square: Square) => {
+      if (!canInteract) return;
+      
+      // Clear arrows on any left click
+      setArrows([]);
+      setDrawingArrow(null);
+      
       if (selectedSquare) {
         if (legalMoves.includes(square)) {
           onMove(selectedSquare, square);
@@ -45,8 +63,54 @@ export const ChessBoard = ({ game, onMove }: ChessBoardProps) => {
         }
       }
     },
-    [selectedSquare, legalMoves, game, onMove]
+    [selectedSquare, legalMoves, game, onMove, canInteract]
   );
+
+  const handleDragStart = useCallback(
+    (square: Square, piece: string) => {
+      if (!canInteract) return;
+      const moves = game.moves({ square, verbose: true });
+      if (moves.length > 0) {
+        setDraggedPiece({ square, piece });
+        setLegalMoves(moves.map((m) => m.to));
+      }
+    },
+    [game, canInteract]
+  );
+
+  const handleDragEnd = useCallback(
+    (targetSquare: Square) => {
+      if (draggedPiece && legalMoves.includes(targetSquare)) {
+        onMove(draggedPiece.square, targetSquare);
+      }
+      setDraggedPiece(null);
+      setLegalMoves([]);
+    },
+    [draggedPiece, legalMoves, onMove]
+  );
+
+  const handleRightClick = useCallback((e: React.MouseEvent, square: Square) => {
+    e.preventDefault();
+    if (drawingArrow) {
+      if (drawingArrow !== square) {
+        setArrows((prev) => [...prev, { from: drawingArrow, to: square }]);
+      }
+      setDrawingArrow(null);
+    } else {
+      setDrawingArrow(square);
+    }
+  }, [drawingArrow]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setArrows([]);
+        setDrawingArrow(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const getPiece = (rank: number, file: number) => {
     const piece = board[rank][file];
@@ -58,9 +122,19 @@ export const ChessBoard = ({ game, onMove }: ChessBoardProps) => {
     return `${files[fileIdx]}${ranks[rankIdx]}` as Square;
   };
 
+  const getSquareCenter = (square: Square) => {
+    const fileIdx = files.indexOf(square[0]);
+    const rankIdx = ranks.indexOf(square[1]);
+    const squareSize = window.innerWidth < 640 ? 64 : window.innerWidth < 768 ? 80 : 96;
+    return {
+      x: fileIdx * squareSize + squareSize / 2,
+      y: rankIdx * squareSize + squareSize / 2,
+    };
+  };
+
   return (
-    <div className="relative inline-block">
-      <div className="grid grid-cols-8 gap-0 border-8 border-[hsl(var(--chess-board-border))] rounded-lg shadow-[var(--shadow-board)] bg-[hsl(var(--chess-board-border))]">
+    <div className="relative inline-block" ref={boardRef}>
+      <div className="grid grid-cols-8 gap-0 border-8 border-[hsl(var(--chess-board-border))] rounded-lg shadow-[var(--shadow-board)] bg-[hsl(var(--chess-board-border))] relative">
         {ranks.map((rank, rankIdx) =>
           files.map((file, fileIdx) => {
             const square = getSquareName(rankIdx, fileIdx);
@@ -73,17 +147,26 @@ export const ChessBoard = ({ game, onMove }: ChessBoardProps) => {
               <button
                 key={square}
                 onClick={() => handleSquareClick(square)}
+                onContextMenu={(e) => handleRightClick(e, square)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => handleDragEnd(square)}
                 className={cn(
-                  "aspect-square w-16 sm:w-20 md:w-24 flex items-center justify-center text-5xl sm:text-6xl md:text-7xl cursor-pointer transition-all duration-200 hover:brightness-110 relative",
+                  "aspect-square w-16 sm:w-20 md:w-24 flex items-center justify-center text-5xl sm:text-6xl md:text-7xl cursor-pointer transition-all duration-300 hover:brightness-110 relative",
                   isLight
                     ? "bg-[hsl(var(--chess-light))]"
                     : "bg-[hsl(var(--chess-dark))]",
                   isSelected && "ring-4 ring-[hsl(var(--chess-selected))] ring-inset",
-                  isLegalMove && "after:absolute after:w-4 after:h-4 after:bg-[hsl(var(--chess-highlight))] after:rounded-full after:opacity-70"
+                  isLegalMove && "after:absolute after:w-4 after:h-4 after:bg-[hsl(var(--chess-highlight))] after:rounded-full after:opacity-70 after:transition-all after:duration-200",
+                  draggedPiece?.square === square && "opacity-50"
                 )}
               >
                 {piece && (
-                  <span className="drop-shadow-lg select-none">
+                  <span 
+                    className="drop-shadow-lg select-none transition-transform duration-300 ease-out"
+                    draggable={canInteract}
+                    onDragStart={() => handleDragStart(square, piece)}
+                    onDragEnd={() => setDraggedPiece(null)}
+                  >
                     {piece}
                   </span>
                 )}
@@ -102,6 +185,42 @@ export const ChessBoard = ({ game, onMove }: ChessBoardProps) => {
           })
         )}
       </div>
+      
+      {/* Arrow overlay */}
+      <svg
+        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+        style={{ zIndex: 10 }}
+      >
+        {arrows.map((arrow, idx) => {
+          const from = getSquareCenter(arrow.from);
+          const to = getSquareCenter(arrow.to);
+          return (
+            <g key={idx}>
+              <defs>
+                <marker
+                  id={`arrowhead-${idx}`}
+                  markerWidth="10"
+                  markerHeight="10"
+                  refX="8"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 10 3, 0 6" fill="rgba(255, 0, 0, 0.7)" />
+                </marker>
+              </defs>
+              <line
+                x1={from.x}
+                y1={from.y}
+                x2={to.x}
+                y2={to.y}
+                stroke="rgba(255, 0, 0, 0.7)"
+                strokeWidth="4"
+                markerEnd={`url(#arrowhead-${idx})`}
+              />
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 };

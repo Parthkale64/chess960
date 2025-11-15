@@ -26,6 +26,10 @@ export const MoveHistory = ({ moves, game }: MoveHistoryProps) => {
     URL.revokeObjectURL(url);
   };
 
+  const exportPGN = () => {
+    return game.pgn();
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>

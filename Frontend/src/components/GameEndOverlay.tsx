@@ -1,16 +1,31 @@
 import { Button } from "@/components/ui/button";
-import { Trophy, Handshake } from "lucide-react";
+import { Trophy, Handshake, Download } from "lucide-react";
+import { Chess } from "chess.js";
 
 interface GameEndOverlayProps {
   visible: boolean;
   status: string;
   onNewGame: () => void;
+  game: Chess;
+  whitePlayerName: string;
+  blackPlayerName: string;
 }
 
-export const GameEndOverlay = ({ visible, status, onNewGame }: GameEndOverlayProps) => {
+export const GameEndOverlay = ({ visible, status, onNewGame, game, whitePlayerName, blackPlayerName }: GameEndOverlayProps) => {
   if (!visible) return null;
 
   const isCheckmate = status.includes("Checkmate") || status.includes("wins");
+
+  const downloadPGN = () => {
+    const pgn = game.pgn();
+    const blob = new Blob([pgn], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `chess-game-${new Date().toISOString().slice(0, 10)}.pgn`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
@@ -29,9 +44,15 @@ export const GameEndOverlay = ({ visible, status, onNewGame }: GameEndOverlayPro
             </p>
           </div>
 
-          <Button onClick={onNewGame} size="lg" className="w-full">
-            New Game
-          </Button>
+          <div className="flex gap-2 w-full">
+            <Button onClick={downloadPGN} variant="outline" size="lg" className="flex-1">
+              <Download className="h-5 w-5 mr-2" />
+              Download PGN
+            </Button>
+            <Button onClick={onNewGame} size="lg" className="flex-1">
+              New Game
+            </Button>
+          </div>
         </div>
       </div>
     </div>
