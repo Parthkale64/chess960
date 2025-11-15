@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Clock } from "lucide-react";
+import { RotateCcw, Clock, Shuffle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface GameStatusProps {
@@ -9,6 +9,7 @@ interface GameStatusProps {
   isCheck: boolean;
   isGameOver: boolean;
   onNewGame: () => void;
+  onChess960: () => void;
   whitePlayerName: string;
   blackPlayerName: string;
   whiteTime: number;
@@ -21,6 +22,7 @@ export const GameStatus = ({
   isCheck,
   isGameOver,
   onNewGame,
+  onChess960,
   whitePlayerName,
   blackPlayerName,
   whiteTime,
@@ -37,14 +39,24 @@ export const GameStatus = ({
         <div className="space-y-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Game Status</h3>
-            <Button
-              onClick={onNewGame}
-              variant="outline"
-              size="icon"
-              className="h-10 w-10"
-            >
-              <RotateCcw className="h-5 w-5" />
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={onChess960}
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+              >
+                <Shuffle className="h-5 w-5" />
+              </Button>
+              <Button
+                onClick={onNewGame}
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+              >
+                <RotateCcw className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -96,19 +108,6 @@ export const GameStatus = ({
           {isCheck && !isGameOver && (
             <div className="bg-destructive/10 border border-destructive rounded-lg p-3">
               <p className="font-semibold text-destructive">Check!</p>
-            </div>
-          )}
-
-          {isGameOver && (
-            <div
-              className={cn(
-                "border rounded-lg p-3",
-                status.includes("Checkmate")
-                  ? "bg-accent/10 border-accent"
-                  : "bg-muted border-border"
-              )}
-            >
-              <p className="font-semibold">{status}</p>
             </div>
           )}
         </div>

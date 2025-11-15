@@ -5,9 +5,15 @@ import { MoveHistory } from "@/components/MoveHistory";
 import { CapturedPieces } from "@/components/CapturedPieces";
 import { GameStatus } from "@/components/GameStatus";
 import { PlayerSettings } from "@/components/PlayerSettings";
+import { PromotionDialog } from "@/components/PromotionDialog";
+import { GameEndOverlay } from "@/components/GameEndOverlay";
+import { Button } from "@/components/ui/button";
+import { Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
 const Index = () => {
+  const { theme, setTheme } = useTheme();
   const [game, setGame] = useState(new Chess());
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [capturedPieces, setCapturedPieces] = useState<
@@ -15,9 +21,11 @@ const Index = () => {
   >([]);
   const [whitePlayerName, setWhitePlayerName] = useState("White");
   const [blackPlayerName, setBlackPlayerName] = useState("Black");
-  const [whiteTime, setWhiteTime] = useState(600); // 10 minutes in seconds
+  const [whiteTime, setWhiteTime] = useState(600);
   const [blackTime, setBlackTime] = useState(600);
   const [isTimerActive, setIsTimerActive] = useState(false);
+  const [showPromotionDialog, setShowPromotionDialog] = useState(false);
+  const [pendingMove, setPendingMove] = useState<{ from: Square; to: Square } | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Timer effect
@@ -55,11 +63,22 @@ const Index = () => {
   }, [isTimerActive, game, whitePlayerName, blackPlayerName]);
 
   const handleMove = useCallback(
-    (from: Square, to: Square) => {
+    (from: Square, to: Square, promotion?: PieceSymbol) => {
       const gameCopy = new Chess(game.fen());
       
+      // Check if this is a pawn promotion move
+      const piece = gameCopy.get(from);
+      const isPromotion = piece?.type === "p" && 
+        ((piece.color === "w" && to[1] === "8") || (piece.color === "b" && to[1] === "1"));
+      
+      if (isPromotion && !promotion) {
+        setPendingMove({ from, to });
+        setShowPromotionDialog(true);
+        return;
+      }
+      
       try {
-        const move = gameCopy.move({ from, to, promotion: "q" });
+        const move = gameCopy.move({ from, to, promotion: promotion || "q" });
         
         if (move) {
           if (!isTimerActive) setIsTimerActive(true);
@@ -76,25 +95,28 @@ const Index = () => {
 
           if (gameCopy.isCheckmate()) {
             setIsTimerActive(false);
-            toast.success(
-              `Checkmate! ${move.color === "w" ? whitePlayerName : blackPlayerName} wins!`
-            );
           } else if (gameCopy.isCheck()) {
             toast.warning("Check!");
           } else if (gameCopy.isDraw()) {
             setIsTimerActive(false);
-            toast.info("Game drawn!");
           } else if (gameCopy.isStalemate()) {
             setIsTimerActive(false);
-            toast.info("Stalemate!");
           }
         }
       } catch (error) {
         console.error("Invalid move:", error);
       }
     },
-    [game, isTimerActive, whitePlayerName, blackPlayerName]
+    [game, isTimerActive]
   );
+
+  const handlePromotionSelect = (piece: PieceSymbol) => {
+    if (pendingMove) {
+      handleMove(pendingMove.from, pendingMove.to, piece);
+      setShowPromotionDialog(false);
+      setPendingMove(null);
+    }
+  };
 
   const handleNewGame = () => {
     setGame(new Chess());
@@ -105,6 +127,37 @@ const Index = () => {
     setIsTimerActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
     toast.success("New game started!");
+  };
+
+  const handleChess960 = () => {
+    const chess960Positions = [
+      "QNNRKR", "NQNRKR", "NNQRKR", "NNRQKR", "NNRKQR", "NNRKRQ",
+      "QNRNKR", "NQRNKR", "NRQNKR", "NRNQKR", "NRNKQR", "NRNKRQ",
+      // Add more valid Chess960 positions
+      "QNRKNR", "NQRKNR", "NRQKNR", "NRKQNR", "NRKNQR", "NRKNRQ",
+      "QNRKRN", "NQRKRN", "NRQKRN", "NRKQRN", "NRKRQN", "NRKRNQ"
+    ];
+    
+    const randomPos = chess960Positions[Math.floor(Math.random() * chess960Positions.length)];
+    const backRank = randomPos.toLowerCase().split("");
+    
+    let fen = backRank.join("") + "/pppppppp/8/8/8/8/PPPPPPPP/" + 
+              backRank.join("").toUpperCase() + " w KQkq - 0 1";
+    
+    const newGame = new Chess();
+    try {
+      newGame.load(fen);
+      setGame(newGame);
+      setMoveHistory([]);
+      setCapturedPieces([]);
+      setWhiteTime(600);
+      setBlackTime(600);
+      setIsTimerActive(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+      toast.success("Chess960 position set!");
+    } catch (error) {
+      toast.error("Failed to set Chess960 position");
+    }
   };
 
   const handlePlayerNamesSave = (whiteName: string, blackName: string) => {
@@ -136,6 +189,17 @@ const Index = () => {
             blackPlayerName={blackPlayerName}
             onSave={handlePlayerNamesSave}
           />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
+          </Button>
         </div>
         <p className="text-center text-muted-foreground">
           Play a game of chess
@@ -155,16 +219,29 @@ const Index = () => {
               isCheck={game.isCheck()}
               isGameOver={game.isGameOver()}
               onNewGame={handleNewGame}
+              onChess960={handleChess960}
               whitePlayerName={whitePlayerName}
               blackPlayerName={blackPlayerName}
               whiteTime={whiteTime}
               blackTime={blackTime}
             />
             <CapturedPieces captured={capturedPieces} />
-            <MoveHistory moves={moveHistory} />
+            <MoveHistory moves={moveHistory} game={game} />
           </div>
         </div>
       </main>
+
+      <PromotionDialog
+        open={showPromotionDialog}
+        onSelect={handlePromotionSelect}
+        color={game.turn() === "w" ? "b" : "w"}
+      />
+
+      <GameEndOverlay
+        visible={game.isGameOver() || whiteTime === 0 || blackTime === 0}
+        status={whiteTime === 0 ? `${blackPlayerName} wins on time!` : blackTime === 0 ? `${whitePlayerName} wins on time!` : getGameStatus()}
+        onNewGame={handleNewGame}
+      />
     </div>
   );
 };

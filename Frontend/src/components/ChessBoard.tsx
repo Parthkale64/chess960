@@ -9,7 +9,7 @@ const pieceUnicode: Record<string, string> = {
 
 interface ChessBoardProps {
   game: Chess;
-  onMove: (from: Square, to: Square) => void;
+  onMove: (from: Square, to: Square, promotion?: PieceSymbol) => void;
 }
 
 export const ChessBoard = ({ game, onMove }: ChessBoardProps) => {
