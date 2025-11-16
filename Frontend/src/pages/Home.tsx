@@ -4,31 +4,110 @@ import { NavigationBar } from "@/components/NavigationBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Crown } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
 const Home = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const [loading, setLoading] = useState(false);
+
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
+
   const [signUpEmail, setSignUpEmail] = useState("");
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpName, setSignUpName] = useState("");
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    // For now, just navigate to game
-    navigate("/game");
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: signInEmail,
+          password: signInPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Login failed");
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      toast({
+        title: "Logged In",
+        description: `Welcome back, ${data.user.name}!`,
+      });
+
+      navigate("/game");
+    } catch (err: any) {
+      toast({
+        title: "Login Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    // For now, just navigate to game
-    navigate("/game");
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: signUpName,
+          email: signUpEmail,
+          password: signUpPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Signup failed");
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      toast({
+        title: "Account Created",
+        description: `Welcome, ${data.user.name}!`,
+      });
+
+      navigate("/game");
+    } catch (err: any) {
+      toast({
+        title: "Signup Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handlePlayAsGuest = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     navigate("/game");
   };
 
@@ -51,7 +130,9 @@ const Home = () => {
             <Card className="border-2">
               <CardHeader>
                 <CardTitle>Welcome Back</CardTitle>
-                <CardDescription>Sign in to your account or create a new one</CardDescription>
+                <CardDescription>
+                  Sign in to your account or create a new one
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="signin" className="w-full">
@@ -59,72 +140,71 @@ const Home = () => {
                     <TabsTrigger value="signin">Sign In</TabsTrigger>
                     <TabsTrigger value="signup">Sign Up</TabsTrigger>
                   </TabsList>
+
+                  {/* SIGN IN */}
                   <TabsContent value="signin">
                     <form onSubmit={handleSignIn} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="signin-email">Email</Label>
+                        <Label>Email</Label>
                         <Input
-                          id="signin-email"
                           type="email"
-                          placeholder="your@email.com"
+                          required
                           value={signInEmail}
                           onChange={(e) => setSignInEmail(e.target.value)}
-                          required
                         />
                       </div>
+
                       <div className="space-y-2">
-                        <Label htmlFor="signin-password">Password</Label>
+                        <Label>Password</Label>
                         <Input
-                          id="signin-password"
                           type="password"
-                          placeholder="••••••••"
+                          required
                           value={signInPassword}
                           onChange={(e) => setSignInPassword(e.target.value)}
-                          required
                         />
                       </div>
-                      <Button type="submit" className="w-full">
-                        Sign In
+
+                      <Button type="submit" className="w-full" disabled={loading}>
+                        {loading ? "Loading..." : "Sign In"}
                       </Button>
                     </form>
                   </TabsContent>
+
+                  {/* SIGN UP */}
                   <TabsContent value="signup">
                     <form onSubmit={handleSignUp} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="signup-name">Name</Label>
+                        <Label>Name</Label>
                         <Input
-                          id="signup-name"
                           type="text"
-                          placeholder="Your name"
+                          required
                           value={signUpName}
                           onChange={(e) => setSignUpName(e.target.value)}
-                          required
                         />
                       </div>
+
                       <div className="space-y-2">
-                        <Label htmlFor="signup-email">Email</Label>
+                        <Label>Email</Label>
                         <Input
-                          id="signup-email"
                           type="email"
-                          placeholder="your@email.com"
+                          required
                           value={signUpEmail}
                           onChange={(e) => setSignUpEmail(e.target.value)}
-                          required
                         />
                       </div>
+
                       <div className="space-y-2">
-                        <Label htmlFor="signup-password">Password</Label>
+                        <Label>Password</Label>
                         <Input
-                          id="signup-password"
                           type="password"
-                          placeholder="••••••••"
+                          required
                           value={signUpPassword}
                           onChange={(e) => setSignUpPassword(e.target.value)}
-                          required
                         />
                       </div>
-                      <Button type="submit" className="w-full">
-                        Sign Up
+
+                      <Button type="submit" className="w-full" disabled={loading}>
+                        {loading ? "Loading..." : "Sign Up"}
                       </Button>
                     </form>
                   </TabsContent>
@@ -132,11 +212,14 @@ const Home = () => {
               </CardContent>
             </Card>
 
+            {/* RIGHT SIDE QUICK PLAY */}
             <div className="space-y-6">
               <Card className="border-2 border-primary">
                 <CardHeader>
                   <CardTitle>Quick Play</CardTitle>
-                  <CardDescription>Jump right into a game without signing in</CardDescription>
+                  <CardDescription>
+                    Jump right into a game without signing in
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Button onClick={handlePlayAsGuest} size="lg" className="w-full">
@@ -149,34 +232,20 @@ const Home = () => {
                 <CardHeader>
                   <CardTitle>Features</CardTitle>
                 </CardHeader>
+
                 <CardContent className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Multiple Game Modes</p>
-                      <p className="text-sm text-muted-foreground">Play standard chess or Chess960</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium">PGN Viewer</p>
-                      <p className="text-sm text-muted-foreground">Review and analyze games</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Multiplayer</p>
-                      <p className="text-sm text-muted-foreground">Play with friends online</p>
-                    </div>
-                  </div>
+                  <p className="font-medium">Multiple Game Modes</p>
+                  <p className="text-sm text-muted-foreground">
+                    Play standard chess or Chess960
+                  </p>
+                  <p className="font-medium">PGN Viewer</p>
+                  <p className="text-sm text-muted-foreground">
+                    Review and analyze games
+                  </p>
+                  <p className="font-medium">Multiplayer</p>
+                  <p className="text-sm text-muted-foreground">
+                    Play with friends online
+                  </p>
                 </CardContent>
               </Card>
             </div>

@@ -2,9 +2,33 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Chess, Square, PieceSymbol, Color } from "chess.js";
 import { cn } from "@/lib/utils";
 
-const pieceUnicode: Record<string, string> = {
-  wp: "♙", wn: "♘", wb: "♗", wr: "♖", wq: "♕", wk: "♔",
-  bp: "♟", bn: "♞", bb: "♝", br: "♜", bq: "♛", bk: "♚",
+// Import SVG pieces
+import pawnW from "@/pieces/pawn-w.svg";
+import pawnB from "@/pieces/pawn-b.svg";
+import knightW from "@/pieces/knight-w.svg";
+import knightB from "@/pieces/knight-b.svg";
+import bishopW from "@/pieces/bishop-w.svg";
+import bishopB from "@/pieces/bishop-b.svg";
+import rookW from "@/pieces/rook-w.svg";
+import rookB from "@/pieces/rook-b.svg";
+import queenW from "@/pieces/queen-w.svg";
+import queenB from "@/pieces/queen-b.svg";
+import kingW from "@/pieces/king-w.svg";
+import kingB from "@/pieces/king-b.svg";
+
+const pieceSvgs: Record<string, string> = {
+  wp: pawnW,
+  wn: knightW,
+  wb: bishopW,
+  wr: rookW,
+  wq: queenW,
+  wk: kingW,
+  bp: pawnB,
+  bn: knightB,
+  bb: bishopB,
+  br: rookB,
+  bq: queenB,
+  bk: kingB,
 };
 
 interface ChessBoardProps {
@@ -57,11 +81,11 @@ export const ChessBoard = ({ game, onMove, playerRole }: ChessBoardProps) => {
   const handleSquareClick = useCallback(
     (square: Square) => {
       if (!canInteract) return;
-      
+
       // Clear arrows on any left click
       setArrows([]);
       setDrawingArrow(null);
-      
+
       if (selectedSquare) {
         if (legalMoves.includes(square)) {
           onMove(selectedSquare, square);
@@ -163,13 +187,13 @@ export const ChessBoard = ({ game, onMove, playerRole }: ChessBoardProps) => {
         setRightMouseDown(false);
       }
     };
-    
+
     const handleMouseUp = () => {
       setRightMouseDown(false);
       setArrowStartSquare(null);
       setDrawingArrow(null);
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
@@ -181,7 +205,7 @@ export const ChessBoard = ({ game, onMove, playerRole }: ChessBoardProps) => {
   const getPiece = (rank: number, file: number) => {
     const piece = board[rank][file];
     if (!piece) return null;
-    return pieceUnicode[`${piece.color}${piece.type}`];
+    return `${piece.color}${piece.type}`;
   };
 
   const getSquareName = (rankIdx: number, fileIdx: number): Square => {
@@ -232,14 +256,14 @@ export const ChessBoard = ({ game, onMove, playerRole }: ChessBoardProps) => {
                 )}
               >
                 {piece && (
-                  <span 
-                    className="drop-shadow-lg select-none transition-transform duration-300 ease-out"
+                  <img
+                    src={pieceSvgs[piece]}
+                    alt={piece}
+                    className="w-full h-full object-contain p-1 select-none pointer-events-none drop-shadow-lg transition-transform duration-300 ease-out"
                     draggable={canInteract}
                     onDragStart={() => handleDragStart(square, piece)}
                     onDragEnd={() => setDraggedPiece(null)}
-                  >
-                    {piece}
-                  </span>
+                  />
                 )}
                 {fileIdx === 0 && (
                   <span className="absolute left-1 top-1 text-xs font-bold opacity-50">
@@ -256,7 +280,7 @@ export const ChessBoard = ({ game, onMove, playerRole }: ChessBoardProps) => {
           })
         )}
       </div>
-      
+
       {/* Arrow overlay */}
       <svg
         className="absolute top-0 left-0 w-full h-full pointer-events-none"

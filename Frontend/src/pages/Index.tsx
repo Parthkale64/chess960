@@ -37,26 +37,26 @@ const Index = () => {
   const [gameResult, setGameResult] = useState("");
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // handleGameUpdate receives FEN from server and updates game + move history
   const handleGameUpdate = useCallback((fen: string) => {
-    // Preserve move history in multiplayer by using the existing game's PGN
+    // Build a new Chess instance from existing PGN if available, otherwise load fen
     const newGame = new Chess();
-    if (game.history().length > 0) {
-      try {
+    try {
+      if (game.history().length > 0) {
         newGame.loadPgn(game.pgn());
-        // Apply the new position if it's different
         if (newGame.fen() !== fen) {
+          // try to load fen (server can be authoritative)
           newGame.load(fen);
         }
-      } catch {
+      } else {
         newGame.load(fen);
       }
-    } else {
+    } catch {
+      // fallback: load fen directly
       newGame.load(fen);
     }
-    
-    setGame(newGame);
-    
-    // Set PGN headers
+
+    // Update PGN headers (keeps metadata)
     const today = new Date();
     newGame.header("Event", "Online Chess Game");
     newGame.header("Site", "Chess App");
@@ -64,7 +64,8 @@ const Index = () => {
     newGame.header("Round", "1");
     newGame.header("White", whitePlayerName);
     newGame.header("Black", blackPlayerName);
-    
+
+    // If game over, set PGN result header
     if (newGame.isGameOver()) {
       let result = "1/2-1/2";
       if (newGame.isCheckmate()) {
@@ -72,14 +73,24 @@ const Index = () => {
       }
       newGame.header("Result", result);
     }
+
+    setGame(newGame);
+
+    // Keep move history in sync with server position
+    setMoveHistory(newGame.history());
   }, [game, whitePlayerName, blackPlayerName]);
 
-  const { playerRole, isConnected, makeMove } = useMultiplayer(
+  // pass JWT token (if any) to the multiplayer hook so socket handshake can authenticate
+  const token = localStorage.getItem("token");
+
+  // useMultiplayer returns create/join/makeMove plus role & connection
+  const { playerRole, isConnected, createRoom, joinRoom, makeMove } = useMultiplayer(
     isMultiplayer ? roomId : null,
-    handleGameUpdate
+    handleGameUpdate,
+    token
   );
 
-  // Timer effect
+  // Timer effect (unchanged logic)
   useEffect(() => {
     if (!isTimerActive || game.isGameOver()) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -95,7 +106,7 @@ const Index = () => {
             setGameResult(result);
             toast.error(result);
             chessSounds.playGameEnd(true);
-            
+
             // Set PGN result
             game.header("Result", "0-1");
             setGame(game);
@@ -111,7 +122,7 @@ const Index = () => {
             setGameResult(result);
             toast.error(result);
             chessSounds.playGameEnd(true);
-            
+
             // Set PGN result
             game.header("Result", "1-0");
             setGame(game);
@@ -127,8 +138,9 @@ const Index = () => {
     };
   }, [isTimerActive, game, whitePlayerName, blackPlayerName]);
 
+  // Modified handleMove: when multiplayer -> await server validation
   const handleMove = useCallback(
-    (from: Square, to: Square, promotion?: PieceSymbol) => {
+    async (from: Square, to: Square, promotion?: PieceSymbol) => {
       // Preserve move history by loading from PGN
       const gameCopy = new Chess();
       if (game.history().length > 0) {
@@ -136,26 +148,37 @@ const Index = () => {
       } else {
         gameCopy.load(game.fen());
       }
-      
+
       // Check if this is a pawn promotion move
       const piece = gameCopy.get(from);
-      const isPromotion = piece?.type === "p" && 
+      const isPromotion = piece?.type === "p" &&
         ((piece.color === "w" && to[1] === "8") || (piece.color === "b" && to[1] === "1"));
-      
+
       if (isPromotion && !promotion) {
         setPendingMove({ from, to });
         setShowPromotionDialog(true);
         return;
       }
-      
+
       if (isMultiplayer) {
-        // Send move to server for validation
-        makeMove({ from, to, promotion: promotion || "q" });
+        // Send move to server for validation and wait response
+        try {
+          const res = await makeMove({ from, to, promotion: promotion || "q" });
+          if (!res?.ok) {
+            toast.error(res?.message || "Move rejected by server");
+            // server will broadcast authoritative position; we will sync via handleGameUpdate
+          } else {
+            // accepted — server will broadcast moveMade and handleGameUpdate will update board
+          }
+        } catch (err) {
+          console.error("makeMove error:", err);
+          toast.error("Network error sending move");
+        }
       } else {
         // Local game
         try {
           const move = gameCopy.move({ from, to, promotion: promotion || "q" });
-          
+
           if (move) {
             if (!isTimerActive) setIsTimerActive(true);
 
@@ -171,7 +194,7 @@ const Index = () => {
 
             setMoveHistory((prev) => [...prev, move.san]);
             setMovesPlayed(prev => prev + 1);
-            
+
             // Add time increment after move
             if (timeIncrement > 0) {
               if (move.color === "w") {
@@ -210,7 +233,7 @@ const Index = () => {
               setGameResult("Stalemate!");
               chessSounds.playGameEnd(false);
             }
-            
+
             setGame(gameCopy);
           }
         } catch (error) {
@@ -218,7 +241,7 @@ const Index = () => {
         }
       }
     },
-    [game, isTimerActive, isMultiplayer, makeMove]
+    [game, isTimerActive, isMultiplayer, makeMove, timeIncrement, whitePlayerName, blackPlayerName]
   );
 
   const handlePromotionSelect = (piece: PieceSymbol) => {
@@ -239,7 +262,7 @@ const Index = () => {
     newGame.header("White", whitePlayerName);
     newGame.header("Black", blackPlayerName);
     newGame.header("Result", "*");
-    
+
     setGame(newGame);
     setMoveHistory([]);
     setCapturedPieces([]);
@@ -254,10 +277,28 @@ const Index = () => {
     toast.success("New game started!");
   };
 
+  // When joining multiplayer, use the hook's joinRoom so socket connects properly
   const handleJoinMultiplayer = (room: string) => {
     setRoomId(room);
     setIsMultiplayer(true);
+    // ensure socket hook joins the correct room
+    joinRoom(room);
     toast.success(`Joining room: ${room}`);
+  };
+
+  // Optional function to create a room and join it
+  const handleCreateAndJoinRoom = async () => {
+    try {
+      const res = await createRoom();
+      if (res.ok && res.roomId) {
+        handleJoinMultiplayer(res.roomId);
+      } else {
+        toast.error(res.message || "Failed to create room");
+      }
+    } catch (err) {
+      console.error("createRoom error:", err);
+      toast.error("Failed to create room");
+    }
   };
 
   const handleChess960 = () => {
@@ -294,7 +335,7 @@ const Index = () => {
     const leftRookPos = remaining[0];
     const kingPos = remaining[1];
     const rightRookPos = remaining[2];
-    
+
     backRank[leftRookPos] = 'R';
     backRank[kingPos] = 'K';
     backRank[rightRookPos] = 'R';
@@ -303,7 +344,6 @@ const Index = () => {
     const blackRank = whiteRank.toLowerCase();
 
     // Build FEN for Chess960 position with castling rights
-    // In Chess960, castling is always possible initially (king is between rooks)
     const fen = `${blackRank}/pppppppp/8/8/8/8/PPPPPPPP/${whiteRank} w KQkq - 0 1`;
 
     let newGame: Chess;
@@ -403,15 +443,35 @@ const Index = () => {
     return "";
   };
 
+  // on mount: if user logged in, fetch profile name and set as white player's name if default
+  useEffect(() => {
+    const t = localStorage.getItem("token");
+    if (!t) return;
+    (async () => {
+      try {
+        const r = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/me`, {
+          headers: { Authorization: `Bearer ${t}` }
+        });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d?.user?.name && whitePlayerName === "White") {
+          setWhitePlayerName(d.user.name);
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
-      <NavigationBar 
+      <NavigationBar
         showPlayerSettings={true}
         whitePlayerName={whitePlayerName}
         blackPlayerName={blackPlayerName}
         onPlayerNamesSave={handlePlayerNamesSave}
       />
-      
+
       <div className="p-4 md:p-8">
         <main className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-6 items-start justify-items-center lg:justify-items-start">
@@ -433,7 +493,7 @@ const Index = () => {
                   </p>
                 </div>
               )}
-              
+
               <div className="flex gap-2">
                 <Button onClick={handleNewGame} className="flex-1">
                   New Local Game
@@ -442,7 +502,7 @@ const Index = () => {
                   Multiplayer
                 </Button>
               </div>
-              
+
               <GameStatus
                 status={getGameStatus()}
                 turn={game.turn()}
@@ -480,6 +540,7 @@ const Index = () => {
         open={showMultiplayerDialog}
         onClose={() => setShowMultiplayerDialog(false)}
         onJoin={handleJoinMultiplayer}
+        onCreateAndJoin={() => { handleCreateAndJoinRoom(); setShowMultiplayerDialog(false); }}
       />
 
       <TimeControlDialog

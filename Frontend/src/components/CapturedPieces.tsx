@@ -1,9 +1,33 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieceSymbol } from "chess.js";
 
-const pieceUnicode: Record<string, string> = {
-  wp: "♙", wn: "♘", wb: "♗", wr: "♖", wq: "♕", wk: "♔",
-  bp: "♟", bn: "♞", bb: "♝", br: "♜", bq: "♛", bk: "♚",
+// Import SVG pieces
+import pawnW from "@/pieces/pawn-w.svg";
+import pawnB from "@/pieces/pawn-b.svg";
+import knightW from "@/pieces/knight-w.svg";
+import knightB from "@/pieces/knight-b.svg";
+import bishopW from "@/pieces/bishop-w.svg";
+import bishopB from "@/pieces/bishop-b.svg";
+import rookW from "@/pieces/rook-w.svg";
+import rookB from "@/pieces/rook-b.svg";
+import queenW from "@/pieces/queen-w.svg";
+import queenB from "@/pieces/queen-b.svg";
+import kingW from "@/pieces/king-w.svg";
+import kingB from "@/pieces/king-b.svg";
+
+const pieceSvgs: Record<string, string> = {
+  wp: pawnW,
+  wn: knightW,
+  wb: bishopW,
+  wr: rookW,
+  wq: queenW,
+  wk: kingW,
+  bp: pawnB,
+  bn: knightB,
+  bb: bishopB,
+  br: rookB,
+  bq: queenB,
+  bk: kingB,
 };
 
 const pieceValues: Record<PieceSymbol, number> = {
@@ -38,9 +62,12 @@ export const CapturedPieces = ({ captured }: CapturedPiecesProps) => {
           </div>
           <div className="flex flex-wrap gap-1 min-h-[2rem]">
             {whiteCaptured.map((c, idx) => (
-              <span key={idx} className="text-2xl">
-                {pieceUnicode[`${c.color}${c.piece}`]}
-              </span>
+              <img
+                key={idx}
+                src={pieceSvgs[`${c.color}${c.piece}`]}
+                alt={`${c.color}${c.piece}`}
+                className="w-8 h-8 object-contain"
+              />
             ))}
           </div>
         </div>
@@ -55,9 +82,12 @@ export const CapturedPieces = ({ captured }: CapturedPiecesProps) => {
           </div>
           <div className="flex flex-wrap gap-1 min-h-[2rem]">
             {blackCaptured.map((c, idx) => (
-              <span key={idx} className="text-2xl">
-                {pieceUnicode[`${c.color}${c.piece}`]}
-              </span>
+              <img
+                key={idx}
+                src={pieceSvgs[`${c.color}${c.piece}`]}
+                alt={`${c.color}${c.piece}`}
+                className="w-8 h-8 object-contain"
+              />
             ))}
           </div>
         </div>
