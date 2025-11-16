@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, Gamepad2, FileText, HelpCircle, Users } from "lucide-react";
+import { Moon, Sun, Home, Gamepad2, FileText, HelpCircle, Users } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { PlayerSettings } from "@/components/PlayerSettings";
@@ -22,7 +22,8 @@ export const NavigationBar = ({
   const location = useLocation();
 
   const navItems = [
-    { path: "/", label: "Game", icon: Gamepad2 },
+    { path: "/", label: "Home", icon: Home },
+    { path: "/game", label: "Game", icon: Gamepad2 },
     { path: "/pgn-viewer", label: "PGN Viewer", icon: FileText },
     { path: "/how-to-play", label: "How to Play", icon: HelpCircle },
   ];
