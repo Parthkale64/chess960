@@ -1,9 +1,21 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, Home, Gamepad2, FileText, HelpCircle, Users } from "lucide-react";
+import { Moon, Sun, Home, Gamepad2, FileText, HelpCircle, Users, UserCircle, LogOut, KeyRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { PlayerSettings } from "@/components/PlayerSettings";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
+
+// Configure your backend API URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 interface NavigationBarProps {
   showPlayerSettings?: boolean;
@@ -20,6 +32,49 @@ export const NavigationBar = ({
 }: NavigationBarProps) => {
   const { theme, setTheme } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('auth_token');
+      setIsAuthenticated(!!token);
+    };
+    
+    checkAuth();
+    
+    // Listen for storage changes (login/logout in other tabs)
+    window.addEventListener('storage', checkAuth);
+    return () => window.removeEventListener('storage', checkAuth);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    setIsAuthenticated(false);
+    toast.success('Logged out successfully');
+    navigate('/');
+  };
+
+  const handleResetPassword = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password-request`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        toast.success('Password reset email sent');
+      } else {
+        toast.error('Failed to send reset email');
+      }
+    } catch (error) {
+      toast.error('Error requesting password reset');
+    }
+  };
 
   const navItems = [
     { path: "/", label: "Home", icon: Home },
@@ -67,6 +122,34 @@ export const NavigationBar = ({
                 onSave={onPlayerNamesSave}
               />
             )}
+            
+            {isAuthenticated ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <UserCircle className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleResetPassword}>
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    Reset Password
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link to="/">
+                <Button variant="default">
+                  Login
+                </Button>
+              </Link>
+            )}
+            
             <Button
               variant="outline"
               size="icon"
