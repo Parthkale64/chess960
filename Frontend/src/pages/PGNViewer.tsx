@@ -5,16 +5,87 @@ import { ChessBoard } from "@/components/ChessBoard";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, SkipBack, ChevronLeft, ChevronRight, SkipForward, FileUp } from "lucide-react";
+import { Upload, SkipBack, ChevronLeft, ChevronRight, SkipForward, FileUp, History, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { chessSounds } from "@/utils/sounds";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+// Configure your backend API URL
+const API_BASE_URL = process.env.VITE_API_URL || 'http://localhost:3000/api';
+
+interface SavedGame {
+  id: string;
+  pgn: string;
+  white_player?: string;
+  black_player?: string;
+  result?: string;
+  date: string;
+}
 
 const PGNViewer = () => {
   const [pgnText, setPgnText] = useState("");
   const [game, setGame] = useState(new Chess());
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
+  const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
+  const [isLoadingGames, setIsLoadingGames] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check authentication status
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    setIsAuthenticated(!!token);
+    
+    if (token) {
+      fetchGameHistory();
+    }
+  }, []);
+
+  // Fetch game history from your backend
+  const fetchGameHistory = async () => {
+    setIsLoadingGames(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/games/history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch game history');
+      }
+
+      const games = await response.json();
+      setSavedGames(games);
+    } catch (error) {
+      console.error('Error fetching game history:', error);
+      toast.error('Failed to load game history');
+    } finally {
+      setIsLoadingGames(false);
+    }
+  };
+
+  // Load a saved game
+  const loadSavedGame = (savedGame: SavedGame) => {
+    setPgnText(savedGame.pgn);
+    try {
+      const newGame = new Chess();
+      newGame.loadPgn(savedGame.pgn);
+      const moves = newGame.history();
+      
+      const displayGame = new Chess();
+      setGame(displayGame);
+      setMoveHistory(moves);
+      setCurrentMoveIndex(-1);
+      toast.success("Game loaded successfully!");
+    } catch (error) {
+      toast.error("Failed to load game");
+      console.error(error);
+    }
+  };
 
   const handleLoadPGN = () => {
     try {
@@ -140,6 +211,60 @@ const PGNViewer = () => {
             </div>
 
             <div className="w-full max-w-xl space-y-4">
+              {isAuthenticated && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <History className="h-5 w-5" />
+                      Your Game History
+                    </CardTitle>
+                    <CardDescription>
+                      Load previously saved games
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingGames ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      </div>
+                    ) : savedGames.length === 0 ? (
+                      <p className="text-muted-foreground text-sm text-center py-4">
+                        No saved games found
+                      </p>
+                    ) : (
+                      <ScrollArea className="h-[200px]">
+                        <div className="space-y-2">
+                          {savedGames.map((savedGame) => (
+                            <Button
+                              key={savedGame.id}
+                              variant="outline"
+                              className="w-full justify-start h-auto py-3"
+                              onClick={() => loadSavedGame(savedGame)}
+                            >
+                              <div className="flex flex-col items-start gap-1 w-full">
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="font-medium text-sm">
+                                    {savedGame.white_player || 'White'} vs {savedGame.black_player || 'Black'}
+                                  </span>
+                                  {savedGame.result && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {savedGame.result}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(savedGame.date).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader>
                   <CardTitle>PGN Viewer</CardTitle>
