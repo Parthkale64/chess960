@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Index from "./pages/Index";
 import PGNViewer from "./pages/PGNViewer";
 import HowToPlay from "./pages/HowToPlay";
+import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/game" element={<Index />} />
             <Route path="/pgn-viewer" element={<PGNViewer />} />
             <Route path="/how-to-play" element={<HowToPlay />} />
+            <Route path="/about" element={<About />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

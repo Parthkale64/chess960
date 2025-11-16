@@ -26,6 +26,7 @@ export const NavigationBar = ({
     { path: "/game", label: "Game", icon: Gamepad2 },
     { path: "/pgn-viewer", label: "PGN Viewer", icon: FileText },
     { path: "/how-to-play", label: "How to Play", icon: HelpCircle },
+    { path: "/about", label: "About", icon: Users },
   ];
 
   return (

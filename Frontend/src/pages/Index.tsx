@@ -302,8 +302,9 @@ const Index = () => {
     const whiteRank = backRank.join('');
     const blackRank = whiteRank.toLowerCase();
 
-    // Build FEN for Chess960 position (no castling rights for validity)
-    const fen = `${blackRank}/pppppppp/8/8/8/8/PPPPPPPP/${whiteRank} w - - 0 1`;
+    // Build FEN for Chess960 position with castling rights
+    // In Chess960, castling is always possible initially (king is between rooks)
+    const fen = `${blackRank}/pppppppp/8/8/8/8/PPPPPPPP/${whiteRank} w KQkq - 0 1`;
 
     let newGame: Chess;
     try {
